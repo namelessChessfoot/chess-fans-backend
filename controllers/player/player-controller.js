@@ -1,6 +1,7 @@
 import axios from "axios";
 import NodeCache from "node-cache";
 import PgnParser from "pgn-parser";
+import { MyPromiseAll } from "../../tools.js";
 import * as playerFollowDao from "./db/player-follow-dao.js";
 import * as userDao from "../user/db/user-dao.js";
 
@@ -8,6 +9,26 @@ import * as userDao from "../user/db/user-dao.js";
 
 const urlCache = new NodeCache({ stdTTL: 60 * 60 * 24, checkperiod: 120 });
 const pgnCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 });
+const CHESS_PARALLEL = 1;
+
+const error_log = (label, e) => {
+  console.log(`ERROR LOG: ${label}`);
+  try {
+    const {
+      code,
+      message,
+      response: { statusText, config: { url } = {} } = {},
+    } = e;
+    console.log(Object.keys(e));
+    console.log(code);
+    console.log(message);
+    console.log(statusText);
+    console.log(url);
+  } catch (aa) {
+    console.log(`ERROR LOG ERROR`);
+    console.log(e);
+  }
+};
 
 const playerInfoFilter = (player) => {
   const { url, avatar, title, name, location, country, joined, last_online } =
@@ -27,10 +48,18 @@ const fetchPlayer = async (req, res, username) => {
   const currentUser = req.session["currentUser"];
   // const uid = currentUser?._id || "6444c8661d857fe2c12d4b38";
   const uid = currentUser?._id || "";
-  const [{ data: player }, { data: stat }, follow] = await Promise.all([
-    axios.get(`https://api.chess.com/pub/player/${username}`),
-    axios.get(`https://api.chess.com/pub/player/${username}/stats`),
-    playerFollowDao.findFollow(uid, username),
+  const [[{ data: player }, { data: stat }], follow] = await MyPromiseAll([
+    [
+      MyPromiseAll,
+      [
+        [
+          [axios.get, [`https://api.chess.com/pub/player/${username}`]],
+          [axios.get, [`https://api.chess.com/pub/player/${username}/stats`]],
+        ],
+        CHESS_PARALLEL,
+      ],
+    ],
+    [playerFollowDao.findFollow, [uid, username]],
   ]);
   let lastVisit = 0;
   if (follow) {
@@ -49,8 +78,17 @@ const getPlayer = async (req, res) => {
     const player = await fetchPlayer(req, res, rusername);
     res.json(player);
   } catch (e) {
+    error_log("getPlayer", e);
     res.sendStatus(404);
   }
+};
+
+const validGame = (game) => {
+  const valid = game.end_time && game.uuid && game.pgn;
+  if (!valid) {
+    console.log(game.end_time, game.uuid, game.pgn);
+  }
+  return valid;
 };
 
 const cacheGame = (game, url) => {
@@ -80,7 +118,10 @@ const getPlayerGames = async (req, res) => {
       return new Date(y, m, 1) >= rtime;
     });
     const all_games = (
-      await Promise.all(archives.map((url) => axios.get(url)))
+      await MyPromiseAll(
+        archives.map((url) => [axios.get, [url]]),
+        CHESS_PARALLEL
+      )
     ).map((i) => i.data.games);
     const ret = [];
     let go = true;
@@ -89,6 +130,9 @@ const getPlayerGames = async (req, res) => {
         url = archives[i];
       for (let j = monthly_games.length - 1; j >= 0; --j) {
         const game = monthly_games[j];
+        if (!validGame(game)) {
+          continue;
+        }
         const d = new Date(game.end_time * 1000); // Stupid JS use timestamp in milliseconds
         if (d < rtime) {
           go = false;
@@ -113,6 +157,7 @@ const getPlayerGames = async (req, res) => {
       })
     );
   } catch (e) {
+    error_log("getPlayerGames", e);
     res.sendStatus(400);
   }
 };
@@ -147,7 +192,7 @@ const getPGN = async (req, res) => {
   }
 };
 
-const getTopPalyer = async (req, res) => {
+const getTopPlayer = async (req, res) => {
   const tmp = [];
   try {
     const chess_leaderboard = (
@@ -169,11 +214,13 @@ const getTopPalyer = async (req, res) => {
       }
       tmp.push(player);
     }
-    const ret = await Promise.all(
-      tmp.map((t) => fetchPlayer(req, res, t.username))
+    const ret = await MyPromiseAll(
+      tmp.map((t) => [fetchPlayer, [req, res, t.username]]),
+      CHESS_PARALLEL
     );
     res.json(ret);
   } catch (e) {
+    error_log("getTopPlayer", e);
     res.sendStatus(404);
   }
 };
@@ -228,11 +275,13 @@ const getSubscribePlayers = (self) => {
         uid = user._id;
       }
       const follows = await playerFollowDao.findFollowByUser(uid);
-      const players = await Promise.all(
-        follows.map((f) => fetchPlayer(req, res, f.playerUsername))
+      const players = await MyPromiseAll(
+        follows.map((f) => [fetchPlayer, [req, res, f.playerUsername]]),
+        CHESS_PARALLEL
       );
       res.json(players);
     } catch (e) {
+      error_log("getSubscribePlayers", e);
       res.sendStatus(400);
     }
   };
@@ -242,7 +291,7 @@ export default (app) => {
   app.get("/api/player/:username", getPlayer);
   app.get("/api/player/pgn/:id", getPGN);
   app.get("/api/player/games/:username/:time", getPlayerGames);
-  app.get("/api/player/top/players", getTopPalyer);
+  app.get("/api/player/top/players", getTopPlayer);
   app.post("/api/player/follow", followPlayer);
   app.post("/api/player/touch", touchPlayer);
   app.get("/api/player/subscribe/players", getSubscribePlayers(true));
