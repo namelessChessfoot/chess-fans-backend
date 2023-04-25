@@ -4,10 +4,10 @@ import PgnParser from "pgn-parser";
 import { MyPromiseAll } from "../../tools.js";
 import * as playerFollowDao from "./db/player-follow-dao.js";
 import * as userDao from "../user/db/user-dao.js";
+import * as gameDao from "./db/game-dao.js";
 
 //https://www.chess.com/news/view/published-data-api
 
-const urlCache = new NodeCache({ stdTTL: 60 * 60 * 24, checkperiod: 120 });
 const pgnCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 });
 const CHESS_PARALLEL = 1;
 
@@ -46,7 +46,6 @@ const playerInfoFilter = (player) => {
 
 const fetchPlayer = async (req, res, username) => {
   const currentUser = req.session["currentUser"];
-  // const uid = currentUser?._id || "6444c8661d857fe2c12d4b38";
   const uid = currentUser?._id || "";
   const [[{ data: player }, { data: stat }], follow] = await MyPromiseAll([
     [
@@ -91,13 +90,13 @@ const validGame = (game) => {
   return valid;
 };
 
-const cacheGame = (game, url) => {
+const cacheGame = async (game, url) => {
   const id = game.uuid;
   const pgn = game.pgn;
   const [res] = PgnParser.parse(pgn);
   game.result = res.result;
   pgnCache.set(id, pgn);
-  urlCache.set(id, url);
+  await gameDao.putGameURL(id, url);
 };
 
 const getPlayerGames = async (req, res) => {
@@ -138,7 +137,7 @@ const getPlayerGames = async (req, res) => {
           go = false;
           break;
         }
-        cacheGame(game, url);
+        await cacheGame(game, url);
         ret.push(game);
       }
     }
@@ -169,7 +168,7 @@ const getPGN = async (req, res) => {
     res.json(pgn);
     return;
   }
-  const url = urlCache.get(id);
+  const url = (await gameDao.getGameByGameId(id))?.url;
   if (url === undefined) {
     res.sendStatus(404);
     return;
@@ -180,8 +179,8 @@ const getPGN = async (req, res) => {
       if (g.uuid === id) {
         pgn = g.pgn;
       }
-      cacheGame(g, url);
     });
+    await MyPromiseAll(games.map((g) => [cacheGame, [g, url]]));
     if (pgn === undefined) {
       res.sendStatus(404);
       return;

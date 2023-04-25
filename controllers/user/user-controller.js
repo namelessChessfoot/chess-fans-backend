@@ -61,7 +61,29 @@ const logout = async (req, res) => {
   res.sendStatus(200);
 };
 
-const update = async (req, res) => {};
+const update = async (req, res) => {
+  const currentUser = req.session["currentUser"];
+  const body = req.body;
+  console.log("Update");
+  if (!currentUser) {
+    // did not log in
+    res.sendStatus(401);
+    return;
+  }
+  if (currentUser.password !== body.oldpassword) {
+    // wrong password
+    res.sendStatus(403);
+    return;
+  }
+  try {
+    delete body.createdAt;
+    const user = await userDao.updateUser(currentUser._id, body);
+    req.session["currentUser"] = user;
+    res.json(userCheck(req, res, user));
+  } catch (e) {
+    res.sendStatus(400);
+  }
+};
 
 export default (app) => {
   app.post("/api/user/register", register);
@@ -69,5 +91,5 @@ export default (app) => {
   app.get("/api/user/profile", profile);
   app.get("/api/user/profile/:username", otherProfile);
   app.post("/api/user/logout", logout);
-  app.put("/api/user", update);
+  app.put("/api/user/update", update);
 };
