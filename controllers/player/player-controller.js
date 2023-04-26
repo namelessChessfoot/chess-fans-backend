@@ -4,7 +4,7 @@ import PgnParser from "pgn-parser";
 import { MyPromiseAll } from "../../tools.js";
 import * as playerFollowDao from "./db/player-follow-dao.js";
 import * as userDao from "../user/db/user-dao.js";
-import * as gameDao from "./db/game-dao.js";
+import * as gameDao from "../game/db/game-dao.js";
 
 //https://www.chess.com/news/view/published-data-api
 
@@ -124,10 +124,19 @@ const getPlayerGames = async (req, res) => {
     ).map((i) => i.data.games);
     const ret = [];
     let go = true;
-    for (let i = all_games.length - 1; go && i >= 0; --i) {
+    const limit = 15;
+    for (
+      let i = all_games.length - 1;
+      go && i >= 0 && ret.length < limit;
+      --i
+    ) {
       const monthly_games = all_games[i],
         url = archives[i];
-      for (let j = monthly_games.length - 1; j >= 0; --j) {
+      for (
+        let j = monthly_games.length - 1;
+        j >= 0 && ret.length < limit;
+        --j
+      ) {
         const game = monthly_games[j];
         if (!validGame(game)) {
           continue;
@@ -141,20 +150,19 @@ const getPlayerGames = async (req, res) => {
         ret.push(game);
       }
     }
-    res.json(
-      ret.map((g) => {
-        return {
-          id: g.uuid,
-          url: g.url,
-          initial: g.initial_setup,
-          final: g.fen,
-          white: g.white,
-          black: g.black,
-          result: g.result,
-          time: g.end_time,
-        };
-      })
-    );
+    const normalized_games = ret.map((g) => {
+      return {
+        id: g.uuid,
+        url: g.url,
+        initial: g.initial_setup,
+        final: g.fen,
+        white: g.white,
+        black: g.black,
+        result: g.result,
+        time: g.end_time,
+      };
+    });
+    res.json(normalized_games);
   } catch (e) {
     error_log("getPlayerGames", e);
     res.sendStatus(400);

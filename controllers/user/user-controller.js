@@ -1,4 +1,6 @@
+import { MyPromiseAll } from "../../tools.js";
 import * as userDao from "./db/user-dao.js";
+import * as userFollowDao from "./db/user-follow-dao.js";
 
 const userCheck = (req, res, user) => {
   const { username, avatar, email, bio, createdAt } = user;
@@ -53,7 +55,15 @@ const otherProfile = async (req, res) => {
     res.sendStatus(404);
     return;
   }
-  res.json(userCheck(req, res, user));
+  const ret = userCheck(req, res, user);
+  const currentUser = req.session["currentUser"];
+  if (currentUser) {
+    const fo = await userFollowDao.findFollow(currentUser._id, user._id);
+    if (fo) {
+      ret.followed = Math.floor(new Date(fo.createdAt).getTime() / 1000);
+    }
+  }
+  res.json(ret);
 };
 
 const logout = async (req, res) => {
@@ -64,7 +74,6 @@ const logout = async (req, res) => {
 const update = async (req, res) => {
   const currentUser = req.session["currentUser"];
   const body = req.body;
-  console.log("Update");
   if (!currentUser) {
     // did not log in
     res.sendStatus(401);
@@ -85,6 +94,103 @@ const update = async (req, res) => {
   }
 };
 
+const followUser = async (req, res) => {
+  const currentUser = req.session["currentUser"];
+  if (!currentUser) {
+    res.sendStatus(401);
+    return;
+  }
+  const fid = currentUser._id;
+  const tname = req.body.username;
+  const tuser = await userDao.findUserByUsername(tname);
+  if (!tuser) {
+    res.sendStatus(404);
+    return;
+  }
+  const tid = tuser._id;
+  const removed = await userFollowDao.unfollow(fid, tid);
+  const ret = { follow: false };
+  if (!removed) {
+    await userFollowDao.follow(fid, tid);
+    ret.follow = true;
+  }
+  res.json(ret);
+};
+
+const getFollowing = async (req, res) => {
+  let username = req.params.username;
+  if (!username) {
+    const currentUser = req.session["currentUser"];
+    if (!currentUser) {
+      res.sendStatus(401);
+      return;
+    } else {
+      username = currentUser.username;
+    }
+  }
+  const user = await userDao.findUserByUsername(username);
+  if (!user) {
+    res.sendStatus(404);
+    return;
+  }
+  const follows = await userFollowDao.findFollowByFid(user._id);
+  const following = (
+    await MyPromiseAll(
+      follows.map((f) => [
+        async (fo) => {
+          const { tid, createdAt } = fo;
+          const user = await userDao.findUserById(tid);
+          if (!user) {
+            return null;
+          }
+          const uc = userCheck(req, res, user);
+          uc.followed = Math.floor(new Date(createdAt).getTime() / 1000);
+          return uc;
+        },
+        [f],
+      ])
+    )
+  ).filter((r) => r !== null);
+  res.json(following);
+};
+
+const getFollower = async (req, res) => {
+  let username = req.params.username;
+  if (!username) {
+    const currentUser = req.session["currentUser"];
+    if (!currentUser) {
+      res.sendStatus(401);
+      return;
+    } else {
+      username = currentUser.username;
+    }
+  }
+  const user = await userDao.findUserByUsername(username);
+  if (!user) {
+    res.sendStatus(404);
+    return;
+  }
+  const follows = await userFollowDao.findFollowByTid(user._id);
+  const follower = (
+    await MyPromiseAll(
+      follows.map((f) => [
+        async (fo) => {
+          const { fid, createdAt } = fo;
+          const user = await userDao.findUserById(fid);
+          if (!user) {
+            return null;
+          }
+          const uc = userCheck(req, res, user);
+          uc.followed = Math.floor(new Date(createdAt).getTime() / 1000);
+          return uc;
+        },
+        [f],
+      ])
+    )
+  ).filter((r) => r !== null);
+  res.json(follower);
+};
+
 export default (app) => {
   app.post("/api/user/register", register);
   app.post("/api/user/login", login);
@@ -92,4 +198,9 @@ export default (app) => {
   app.get("/api/user/profile/:username", otherProfile);
   app.post("/api/user/logout", logout);
   app.put("/api/user/update", update);
+  app.post("/api/user/follow", followUser);
+  app.get("/api/user/following/:username", getFollowing);
+  app.get("/api/user/follower/:username", getFollower);
+  app.get("/api/user/following", getFollowing);
+  app.get("/api/user/follower", getFollower);
 };

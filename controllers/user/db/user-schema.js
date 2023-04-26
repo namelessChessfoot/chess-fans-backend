@@ -7,15 +7,7 @@ const userSchema = new mongoose.Schema(
     email: String,
     bio: String,
     createdAt: { type: Date, default: Date.now },
-    // firstName: String,
-    // lastName: String,
-    // dob: Date,
     // isAdmin: { type: Boolean, default: false },
-    // role: {
-    //   type: String,
-    //   default: "user",
-    //   enum: ["admin", "user", "guest", "moderator"],
-    // },
   },
   { collection: "users" }
 );

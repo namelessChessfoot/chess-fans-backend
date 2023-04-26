@@ -4,6 +4,7 @@ import session from "express-session";
 import mongoose from "mongoose";
 import playerController from "./controllers/player/player-controller.js";
 import userController from "./controllers/user/user-controller.js";
+import gameController from "./controllers/game/game-controller.js";
 
 const CONNECTION_STRING =
   process.env.DB_CONNECTION_STRING || "mongodb://127.0.0.1:27017/chess-fans";
@@ -23,4 +24,5 @@ app.use(
 app.use(express.json());
 userController(app);
 playerController(app);
+gameController(app);
 app.listen(4000);
