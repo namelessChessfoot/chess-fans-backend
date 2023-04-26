@@ -22,6 +22,10 @@ app.use(
   session({ secret: "HappyGraduation", resave: false, saveUninitialized: true })
 );
 app.use(express.json());
+app.get("/hello", async (req, res) => {
+  console.log("Hello world");
+  res.json("Hello world");
+});
 userController(app);
 playerController(app);
 gameController(app);
