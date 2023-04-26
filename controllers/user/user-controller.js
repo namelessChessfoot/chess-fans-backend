@@ -32,7 +32,9 @@ const login = async (req, res) => {
   const password = req.body.password;
   const user = await userDao.findUserByCredentials(username, password);
   if (user) {
+    console.log(user);
     req.session["currentUser"] = user;
+    console.log(req.session["currentUser"]);
     res.json(userCheck(req, res, user));
   } else {
     res.sendStatus(404);
@@ -40,7 +42,9 @@ const login = async (req, res) => {
 };
 
 const profile = async (req, res) => {
+  console.log("Get profile");
   const currentUser = req.session["currentUser"];
+  console.log(!!currentUser);
   if (!currentUser) {
     res.sendStatus(404);
     return;
