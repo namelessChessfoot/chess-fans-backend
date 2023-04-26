@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
-// import session from "express-session";
-import session from "cookie-session";
+import session from "express-session";
+// import session from "cookie-session";
 import mongoose from "mongoose";
 import playerController from "./controllers/player/player-controller.js";
 import userController from "./controllers/user/user-controller.js";
@@ -13,14 +13,23 @@ const FRONTEND = process.env.FRONTEND || "http://localhost:3000";
 mongoose.connect(CONNECTION_STRING);
 
 const app = express();
+const sess = {
+  secret: "HappyGraduation",
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false },
+};
+if (process.env.FRONTEND) {
+  app.set("trust proxy", 1);
+  sess.cookie.secure = true;
+  sess.cookie.sameSite = "none";
+}
+app.use(session(sess));
 app.use(
   cors({
     credentials: true,
     origin: FRONTEND,
   })
-);
-app.use(
-  session({ secret: "HappyGraduation", resave: false, saveUninitialized: true })
 );
 app.use(express.json());
 app.get("/hello", async (req, res) => {

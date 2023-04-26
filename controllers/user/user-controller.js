@@ -32,9 +32,7 @@ const login = async (req, res) => {
   const password = req.body.password;
   const user = await userDao.findUserByCredentials(username, password);
   if (user) {
-    console.log(user);
     req.session["currentUser"] = user;
-    console.log(req.session["currentUser"]);
     res.json(userCheck(req, res, user));
   } else {
     res.sendStatus(404);
