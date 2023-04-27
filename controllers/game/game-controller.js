@@ -69,7 +69,7 @@ const deleteComment = async (req, res) => {
     query.userid = currentUser._id;
   }
   const removed = await commentDao.deleteComment(query);
-  if (!removed) {
+  if (!removed && !currentUser.isAdmin) {
     res.sendStatus(403);
     return;
   }
