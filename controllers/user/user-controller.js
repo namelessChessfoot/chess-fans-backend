@@ -3,11 +3,14 @@ import * as userDao from "./db/user-dao.js";
 import * as userFollowDao from "./db/user-follow-dao.js";
 
 const userCheck = (req, res, user) => {
-  const { username, avatar, email, bio, createdAt } = user;
+  const { username, avatar, email, bio, createdAt, isAdmin } = user;
   const verified = { username, avatar, bio };
   verified.createdAt = Math.floor(new Date(createdAt).getTime() / 1000);
   if (username === req.session["currentUser"]?.username) {
     verified.email = email;
+    if (isAdmin) {
+      verified.isAdmin = true;
+    }
   }
   return verified;
 };
@@ -20,13 +23,16 @@ const register = async (req, res) => {
       res.sendStatus(409);
       return;
     }
-    const newUser = await userDao.createUser(req.body);
+    const incomingUser = req.body;
+    incomingUser.isAdmin = incomingUser.username === "ADMIN";
+    const newUser = await userDao.createUser(incomingUser);
     req.session["currentUser"] = newUser;
     res.json(userCheck(req, res, newUser));
   } catch (e) {
     res.sendStatus(400);
   }
 };
+
 const login = async (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
@@ -86,6 +92,7 @@ const update = async (req, res) => {
   }
   try {
     delete body.createdAt;
+    delete body.isAdmin;
     const user = await userDao.updateUser(currentUser._id, body);
     req.session["currentUser"] = user;
     res.json(userCheck(req, res, user));

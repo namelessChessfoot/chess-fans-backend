@@ -64,8 +64,8 @@ const deleteComment = async (req, res) => {
     return;
   }
   const query = { _id: commentid };
-  if (true) {
-    //is not admin
+  if (!currentUser.isAdmin) {
+    // If the current user is not admin, they can only delete their own comments
     query.userid = currentUser._id;
   }
   const removed = await commentDao.deleteComment(query);

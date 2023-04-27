@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema(
     email: String,
     bio: String,
     createdAt: { type: Date, default: Date.now },
-    // isAdmin: { type: Boolean, default: false },
+    isAdmin: { type: Boolean, default: false },
   },
   { collection: "users" }
 );
