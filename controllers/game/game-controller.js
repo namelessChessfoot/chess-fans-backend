@@ -1,6 +1,7 @@
 import * as gameDao from "./db/game-dao.js";
 import * as commentDao from "./db/comment-dao.js";
 import * as userDao from "../user/db/user-dao.js";
+import * as userFollowDao from "../user/db/user-follow-dao.js";
 import { MyPromiseAll } from "../../tools.js";
 
 const commentInfoFilter = (comment) => {
@@ -98,10 +99,45 @@ const getUserComment = async (req, res) => {
   res.json(ret);
 };
 
+const getRecentComments = async (req, res) => {
+  const currentUser = req.session["currentUser"];
+  if (!currentUser) {
+    res.sendStatus(401);
+    return;
+  }
+  const fid = currentUser._id;
+  // const fid = "644892126b278197485d387c";
+  const follows = await userFollowDao.findFollowByFid(fid);
+  const threshold_date = new Date();
+  threshold_date.setDate(threshold_date.getDate() - 3);
+  const ret = [];
+  await MyPromiseAll(
+    follows.map((f) => [
+      async (ff) => {
+        const [comments, user] = await MyPromiseAll([
+          [commentDao.getRecentComments, [ff.tid, threshold_date]],
+          [userDao.findUserById, [ff.tid]],
+        ]);
+        comments.forEach((c) => {
+          const tmp = commentInfoFilter(c);
+          tmp.username = user.username;
+          tmp.avatar = user.avatar;
+          ret.push(tmp);
+        });
+        return true;
+      },
+      [f],
+    ])
+  );
+  ret.sort((a, b) => b.createdAt - a.createdAt);
+  res.json(ret);
+};
+
 export default (app) => {
   app.post("/api/game/comment", postComment);
   app.get("/api/game/comment/:gameid", getGameComment);
   app.get("/api/game/user/comment/:username", getUserComment);
   app.get("/api/game/user/comment", getUserComment);
   app.delete("/api/game/comment/:commentid", deleteComment);
+  app.get("/api/game/following/comment", getRecentComments);
 };

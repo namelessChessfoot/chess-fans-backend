@@ -8,3 +8,6 @@ export const getCommentByGame = (gameid) => commentModel.find({ gameid });
 export const getCommentByUser = (userid) => commentModel.find({ userid });
 
 export const deleteComment = (query) => commentModel.findOneAndDelete(query);
+
+export const getRecentComments = (userid, date) =>
+  commentModel.find({ userid, createdAt: { $gte: date } });
